@@ -238,6 +238,9 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.12.0")
     // 证书签名相关
     implementation("com.madgag.spongycastle:bcpkix-jdk15on:1.56.0.0")
+    // APK v1+v2 signing for the packaging feature (ApkBuilder/ApkSigner):
+    // Google apksig replaces the v1-only tiny-sign ZipSigner.
+    implementation("com.android.tools.build:apksig:8.0.2")
     //Expandable RecyclerView
     implementation("com.thoughtbot:expandablerecyclerview:1.3")
 //    implementation("org.signal.autox:apkbuilder:1.0.3")

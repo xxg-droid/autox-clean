@@ -85,7 +85,6 @@ fun DrawerPage() {
             Text(text = stringResource(id = R.string.text_script_record))
             FloatingWindowSwitch()
             VolumeDownControlSwitch()
-            AutoBackupSwitch()
 
             Text(text = stringResource(id = R.string.text_others))
 
@@ -173,36 +172,6 @@ fun exitCompletely(context: Context) {
 }
 
 
-
-
-
-
-@Composable
-private fun AutoBackupSwitch() {
-    val context = LocalContext.current
-    var enable by remember {
-        val default = PreferenceManager.getDefaultSharedPreferences(context)
-            .getBoolean(context.getString(R.string.key_auto_backup), false)
-        mutableStateOf(default)
-    }
-    SwitchItem(
-        icon = {
-            MyIcon(
-                painterResource(id = R.drawable.ic_backup),
-                null
-            )
-        },
-        text = { Text(text = stringResource(id = R.string.text_auto_backup)) },
-        checked = enable,
-        onCheckedChange = {
-            PreferenceManager.getDefaultSharedPreferences(context)
-                .edit()
-                .putBoolean(context.getString(R.string.key_auto_backup), it)
-                .apply()
-            enable = it
-        }
-    )
-}
 
 @Composable
 private fun VolumeDownControlSwitch() {

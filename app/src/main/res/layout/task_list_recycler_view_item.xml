@@ -1,26 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+<!-- build27 UI 改版：管理页（定时任务）行，图标与文字按新比例放大，颜色跟随主题 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
               xmlns:tools="http://schemas.android.com/tools"
               android:id="@+id/item"
               android:layout_width="match_parent"
               android:layout_height="wrap_content"
-              android:background="@android:color/white"
+              android:background="@color/item_background"
               android:clickable="true"
               android:foreground="?selectableItemBackground"
               android:orientation="horizontal"
-              android:padding="8dp">
+              android:padding="12dp">
 
     <TextView
         android:id="@+id/first_char"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_gravity="center_vertical"
         android:layout_marginLeft="8dp"
         android:background="@drawable/circle_light_green"
         android:gravity="center"
         android:textColor="@android:color/white"
-        android:textSize="24sp"
+        android:textSize="28sp"
         tools:text="J"/>
 
     <LinearLayout
@@ -38,8 +39,9 @@
             android:ellipsize="end"
             android:gravity="center_vertical"
             android:maxLines="1"
-            android:textColor="#484C4F"
-            android:textSize="14sp"
+            android:textColor="@color/script_file_name"
+            android:textSize="16sp"
+            android:textStyle="bold"
             tools:text="正在运行的服务"/>
 
         <TextView
@@ -51,8 +53,8 @@
             android:ellipsize="end"
             android:gravity="center_vertical"
             android:maxLines="1"
-            android:textColor="#9DA0A2"
-            android:textSize="11sp"
+            android:textColor="@color/script_file_desc"
+            android:textSize="12sp"
             tools:text="18 KB"/>
 
     </LinearLayout>
@@ -60,7 +62,7 @@
 
     <ImageView
         android:id="@+id/stop"
-        android:layout_width="36dp"
+        android:layout_width="48dp"
         android:layout_height="match_parent"
         android:background="?selectableItemBackgroundBorderless"
         android:clickable="true"

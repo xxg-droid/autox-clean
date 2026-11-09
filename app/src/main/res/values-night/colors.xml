@@ -19,4 +19,16 @@
     <color name="console_debug">#dfc0c0c0</color>
     <color name="console_verbose">#7F7F80</color>
 
+    <!-- build27 UI 改版：文件卡片 / 管理页共用，亮色版见 values -->
+    <color name="script_file_name">#E3E2E6</color>
+    <color name="script_file_desc">#C3C6CF</color>
+    <color name="js_badge_yellow">#F7DF1E</color>
+    <color name="js_badge_text">#323330</color>
+    <color name="play_button_bg">#3A3A3A</color>
+    <color name="play_button_ring">#4A4A4A</color>
+    <color name="play_button_icon">#A8E6B0</color>
+    <color name="mint_fab">#A8E6B0</color>
+    <color name="swipe_delete_bg">#E57373</color>
+    <color name="swipe_more_bg">#3A3A3A</color>
+
 </resources>

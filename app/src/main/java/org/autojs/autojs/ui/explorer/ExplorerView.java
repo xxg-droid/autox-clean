@@ -2,23 +2,30 @@ package org.autojs.autojs.ui.explorer;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import androidx.annotation.Nullable;
 import com.google.android.material.snackbar.Snackbar;
 import androidx.core.content.ContextCompat;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.PopupMenu;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 
 import com.stardust.pio.PFiles;
@@ -48,11 +55,16 @@ import org.autojs.autojs.workground.WrapContentGridLayoutManger;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.Stack;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
+import butterknife.OnLongClick;
 import io.reactivex.Observable;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.functions.Function;
@@ -89,6 +101,10 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
     private Function<ExplorerItem, Boolean> mFilter;
     private OnItemOperatedListener mOnItemOperatedListener;
     protected ExplorerItem mSelectedItem;
+    // build27 UI 改版：右滑后保持展开的操作按钮（按文件路径记录，避免位置变化后错乱）
+    private final Set<String> mRevealedItemPaths = new HashSet<>();
+    // 右滑展开的宽度（dp）：删除 48 + 间距 8 + 更多 48 + 左边距 4 ≈ 108，取 112 留一点余量
+    private static final int REVEAL_WIDTH_DP = 112;
     private Explorer mExplorer;
     private Stack<ExplorerPageState> mPageStateHistory = new Stack<>();
     private ExplorerPageState mCurrentPageState = new ExplorerPageState();
@@ -221,6 +237,8 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
 
     private void initExplorerItemListView() {
         mExplorerItemListView.setAdapter(mExplorerAdapter);
+        // build27 UI 改版：右滑文件行露出“删除 + ⋮”（仅横向滑动，不与下拉刷新冲突）
+        new ItemTouchHelper(new ExplorerSwipeCallback()).attachToRecyclerView(mExplorerItemListView);
         WrapContentGridLayoutManger manager = new WrapContentGridLayoutManger(getContext(), 2);
         manager.setDebugInfo("ExplorerView");
         manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
@@ -320,7 +338,12 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
     @SuppressLint("NonConstantResourceId")
     @Override
     public boolean onMenuItemClick(MenuItem item) {
-        switch (item.getItemId()) {
+        return onMenuItemSelected(item.getItemId());
+    }
+
+    // build27 UI 改版：把菜单处理按 id 拆出来，长按弹出的菜单行直接复用同一套逻辑
+    private boolean onMenuItemSelected(int itemId) {
+        switch (itemId) {
             case R.id.rename:
                 new ScriptOperations(getContext(), this, getCurrentPage())
                         .rename((ExplorerFileItem) mSelectedItem)
@@ -379,6 +402,188 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
                 return false;
         }
         return true;
+    }
+
+    private int getRevealWidthPx() {
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        return (int) (REVEAL_WIDTH_DP * dm.density + 0.5f);
+    }
+
+    private int findFileAdapterPosition(String path) {
+        if (path == null) return -1;
+        for (int i = 0; i < mExplorerItemList.itemCount(); i++) {
+            ExplorerItem item = mExplorerItemList.getItem(i);
+            if (item != null && path.equals(item.getPath())) {
+                return i + positionOfCategoryFile() + 1;
+            }
+        }
+        return -1;
+    }
+
+    // build27 UI 改版：右滑文件行露出“删除 + ⋮”，滑开后保持展开；已展开的行左滑或点一下收起
+    private class ExplorerSwipeCallback extends ItemTouchHelper.SimpleCallback {
+
+        ExplorerSwipeCallback() {
+            super(0, ItemTouchHelper.RIGHT | ItemTouchHelper.LEFT);
+        }
+
+        @Override
+        public int getMovementFlags(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
+            if (!(viewHolder instanceof ExplorerItemViewHolder)) {
+                return 0;
+            }
+            ExplorerItem item = ((ExplorerItemViewHolder) viewHolder).mExplorerItem;
+            int swipeDirs = ItemTouchHelper.RIGHT;
+            if (item != null && mRevealedItemPaths.contains(item.getPath())) {
+                swipeDirs |= ItemTouchHelper.LEFT;
+            }
+            return makeMovementFlags(0, swipeDirs);
+        }
+
+        @Override
+        public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+            return false;
+        }
+
+        @Override
+        public void onSwiped(RecyclerView.ViewHolder viewHolder, int direction) {
+            if (!(viewHolder instanceof ExplorerItemViewHolder)) {
+                return;
+            }
+            ExplorerItem item = ((ExplorerItemViewHolder) viewHolder).mExplorerItem;
+            if (item == null) {
+                return;
+            }
+            String path = item.getPath();
+            if (direction == ItemTouchHelper.RIGHT) {
+                // 一次只展开一行，先收起之前展开的
+                for (String p : new HashSet<>(mRevealedItemPaths)) {
+                    if (!p.equals(path)) {
+                        mRevealedItemPaths.remove(p);
+                        int pos = findFileAdapterPosition(p);
+                        if (pos >= 0) {
+                            mExplorerAdapter.notifyItemChanged(pos);
+                        }
+                    }
+                }
+                mRevealedItemPaths.add(path);
+            } else {
+                mRevealedItemPaths.remove(path);
+            }
+            int pos = findFileAdapterPosition(path);
+            if (pos >= 0) {
+                mExplorerAdapter.notifyItemChanged(pos);
+            }
+        }
+
+        @Override
+        public void onChildDraw(Canvas c, RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder,
+                                float dX, float dY, int actionState, boolean isCurrentlyActive) {
+            if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && viewHolder instanceof ExplorerItemViewHolder) {
+                View foreground = viewHolder.itemView.findViewById(R.id.foreground);
+                if (foreground != null) {
+                    int revealWidth = getRevealWidthPx();
+                    ExplorerItem item = ((ExplorerItemViewHolder) viewHolder).mExplorerItem;
+                    boolean revealed = item != null && mRevealedItemPaths.contains(item.getPath());
+                    float clamped;
+                    if (revealed) {
+                        // 已展开时左滑收起：从展开宽度往 0 回滑
+                        clamped = Math.max(0, Math.min(revealWidth + dX, revealWidth));
+                    } else {
+                        clamped = Math.max(0, Math.min(dX, revealWidth));
+                    }
+                    foreground.setTranslationX(clamped);
+                    return;
+                }
+            }
+            super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+        }
+
+        @Override
+        public float getSwipeThreshold(RecyclerView.ViewHolder viewHolder) {
+            int width = viewHolder.itemView.getWidth();
+            if (width <= 0) {
+                return 0.5f;
+            }
+            // 滑过展开宽度的一半就触发展开/收起
+            return (getRevealWidthPx() * 0.5f) / width;
+        }
+    }
+
+    // build27 UI 改版：长按文件弹出菜单（半透明遮罩 + 圆角卡片），选项与 ⋮ 菜单相同
+    private void showLongPressMenu(View anchor, ExplorerItem item) {
+        if (item == null) {
+            return;
+        }
+        mSelectedItem = item;
+        // 与 ⋮ 菜单相同的选项（把“更多”子菜单展开成平铺列表），条件过滤也相同
+        List<int[]> options = new ArrayList<>();
+        boolean executable = item.isExecutable();
+        if (executable) {
+            options.add(new int[]{R.id.run_repeatedly, R.string.text_run_repeatedly});
+        }
+        if (item.canRename()) {
+            options.add(new int[]{R.id.rename, R.string.text_rename});
+        }
+        if (item.canDelete()) {
+            options.add(new int[]{R.id.delete, R.string.text_delete});
+        }
+        options.add(new int[]{R.id.send, R.string.text_send});
+        if (item instanceof ExplorerSampleItem) {
+            options.add(new int[]{R.id.reset, R.string.text_reset_to_initial_content});
+        }
+        if (executable) {
+            options.add(new int[]{R.id.timed_task, R.string.text_timed_task});
+            options.add(new int[]{R.id.create_shortcut, R.string.text_send_shortcut});
+            options.add(new int[]{R.id.open_by_other_apps, R.string.text_open_by_other_apps});
+            options.add(new int[]{R.id.action_build_apk, R.string.text_build_apk});
+        }
+        if (options.isEmpty()) {
+            return;
+        }
+
+        View popupView = LayoutInflater.from(getContext()).inflate(R.layout.popup_file_long_press, null);
+        android.widget.LinearLayout optionList = popupView.findViewById(R.id.option_list);
+        final PopupWindow popupWindow = new PopupWindow(
+                popupView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, true);
+        popupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popupWindow.setOutsideTouchable(true);
+        for (int[] option : options) {
+            final int itemId = option[0];
+            TextView row = (TextView) LayoutInflater.from(getContext())
+                    .inflate(R.layout.popup_file_long_press_item, optionList, false);
+            row.setText(option[1]);
+            row.setOnClickListener(v -> {
+                popupWindow.dismiss();
+                onMenuItemSelected(itemId);
+            });
+            optionList.addView(row);
+        }
+        popupView.findViewById(R.id.dim_background).setOnClickListener(v -> popupWindow.dismiss());
+
+        // 把卡片放在被长按的行附近（下方，空间不够时放上方）
+        View card = popupView.findViewById(R.id.popup_card);
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        float density = dm.density;
+        int cardWidth = (int) (280 * density + 0.5f);
+        card.measure(
+                View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int cardHeight = card.getMeasuredHeight();
+        int[] loc = new int[2];
+        anchor.getLocationOnScreen(loc);
+        int margin = (int) (16 * density + 0.5f);
+        int x = Math.max(margin, Math.min(loc[0], dm.widthPixels - cardWidth - margin));
+        int y = loc[1] + anchor.getHeight() + (int) (8 * density + 0.5f);
+        if (y + cardHeight > dm.heightPixels - margin) {
+            y = loc[1] - cardHeight - (int) (8 * density + 0.5f);
+        }
+        y = Math.max(margin, y);
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) card.getLayoutParams();
+        lp.leftMargin = x;
+        lp.topMargin = y;
+        card.setLayoutParams(lp);
+        popupWindow.showAtLocation(anchor, Gravity.NO_GRAVITY, 0, 0);
     }
 
     protected void notifyOperated() {
@@ -515,18 +720,18 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
         TextView mDesc;
         @BindView(R.id.more)
         View mOptions;
+        @BindView(R.id.swipe_more)
+        View mSwipeMore;
         @BindView(R.id.edit)
         View mEdit;
         @BindView(R.id.run)
         View mRun;
 
-        GradientDrawable mFirstCharBackground;
         private ExplorerItem mExplorerItem;
 
         ExplorerItemViewHolder(View itemView) {
             super(itemView);
             ButterKnife.bind(this, itemView);
-            mFirstCharBackground = (GradientDrawable) mFirstChar.getBackground();
         }
 
         @Override
@@ -534,18 +739,34 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
             mExplorerItem = item;
             mName.setText(ExplorerViewHelper.getDisplayName(item));
             mDesc.setText(PFiles.getHumanReadableSize(item.getSize()));
-            mFirstChar.setText(ExplorerViewHelper.getIconText(item));
-            mFirstCharBackground.setColor(ExplorerViewHelper.getIconColor(item));
+            // build27 UI 改版：黄色圆角方块 js 标志（所有文件行统一用 js 徽标，与效果图一致）
+            mFirstChar.setText("js");
             mEdit.setVisibility(item.isEditable() ? VISIBLE : GONE);
             mRun.setVisibility(item.isExecutable() ? VISIBLE : GONE);
+            // 右滑展开过的行在复用时保持展开状态
+            View foreground = itemView.findViewById(R.id.foreground);
+            if (foreground != null) {
+                foreground.setTranslationX(mRevealedItemPaths.contains(item.getPath()) ? getRevealWidthPx() : 0);
+            }
         }
 
         @OnClick(R.id.item)
         void onItemClick() {
+            // 已展开操作按钮时，点一下先收起，不打开文件
+            if (mRevealedItemPaths.remove(mExplorerItem.getPath())) {
+                mExplorerAdapter.notifyItemChanged(getAdapterPosition());
+                return;
+            }
             if (mOnItemClickListener != null) {
                 mOnItemClickListener.onItemClick(itemView, mExplorerItem);
             }
             notifyOperated();
+        }
+
+        @OnLongClick(R.id.item)
+        boolean onItemLongClick() {
+            showLongPressMenu(itemView, mExplorerItem);
+            return true;
         }
 
         @OnClick(R.id.run)
@@ -560,10 +781,26 @@ public class ExplorerView extends ThemeColorSwipeRefreshLayout implements SwipeR
             notifyOperated();
         }
 
+        @OnClick(R.id.swipe_delete)
+        void onSwipeDelete() {
+            mRevealedItemPaths.remove(mExplorerItem.getPath());
+            new ScriptOperations(getContext(), ExplorerView.this, getCurrentPage())
+                    .delete(mExplorerItem.toScriptFile());
+        }
+
+        @OnClick(R.id.swipe_more)
+        void onSwipeMore() {
+            showOptionMenu(mSwipeMore);
+        }
+
         @OnClick(R.id.more)
         void showOptionMenu() {
+            showOptionMenu(mOptions);
+        }
+
+        void showOptionMenu(View anchor) {
             mSelectedItem = mExplorerItem;
-            PopupMenu popupMenu = new PopupMenu(getContext(), mOptions);
+            PopupMenu popupMenu = new PopupMenu(getContext(), anchor);
             popupMenu.inflate(R.menu.menu_script_options);
             Menu menu = popupMenu.getMenu();
             if (!mExplorerItem.isExecutable()) {

@@ -32,4 +32,16 @@
     <color name="on_surface">#FF000000</color>
     <color name="on_secondary">#FFFFFFFF</color>
     <color name="on_background">#FF000000</color>
+
+    <!-- build27 UI 改版：文件卡片 / 管理页共用，亮暗两套见 values-night -->
+    <color name="script_file_name">#1A1A1A</color>
+    <color name="script_file_desc">#757575</color>
+    <color name="js_badge_yellow">#F7DF1E</color>
+    <color name="js_badge_text">#323330</color>
+    <color name="play_button_bg">#FFFFFF</color>
+    <color name="play_button_ring">#D5D5D5</color>
+    <color name="play_button_icon">#484C4F</color>
+    <color name="mint_fab">#A8E6B0</color>
+    <color name="swipe_delete_bg">#E57373</color>
+    <color name="swipe_more_bg">#EEEEEE</color>
 </resources>

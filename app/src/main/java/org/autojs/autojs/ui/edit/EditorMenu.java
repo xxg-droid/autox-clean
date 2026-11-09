@@ -1,6 +1,7 @@
 package org.autojs.autojs.ui.edit;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -134,6 +135,11 @@ public class EditorMenu {
                 return true;
             case R.id.action_build_apk:
                 startBuildApkActivity();
+                return true;
+            case R.id.action_exit:
+                // Reuse the existing exit flow: EditActivity.finish() shows the
+                // save-confirm dialog when the text changed, otherwise exits.
+                ((Activity) mContext).finish();
                 return true;
 
         }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- build27 UI 改版：右滑露出的删除按钮底色（16dp 圆角） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp"/>
+    <solid android:color="@color/swipe_delete_bg"/>
+</shape>

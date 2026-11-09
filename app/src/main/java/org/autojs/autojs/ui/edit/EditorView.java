@@ -437,17 +437,30 @@ public class EditorView extends FrameLayout implements CodeCompletionBar.OnHintC
 
     public Observable<String> save() {
         String path = mUri.getPath();
-        String backPath = path + ".b_a_k";
-        PFiles.move(path, backPath);
         return Observable.just(mEditor.getText())
                 .observeOn(Schedulers.io())
-                .doOnNext(s -> PFiles.write(getContext().getContentResolver().openOutputStream(mUri), s))
+                .doOnNext(s -> writeText(path, s))
                 .observeOn(AndroidSchedulers.mainThread())
                 .doOnNext(s -> {
                     mEditor.markTextAsSaved();
                     setMenuItemStatus(R.id.save, false);
-                })
-                .doOnNext(s -> new File(backPath).delete());
+                });
+    }
+
+    /**
+     * Writes the editor text to {@code path}. For a real file (the normal case:
+     * scripts on storage) this is an atomic temp-write/verify/swap via
+     * {@link AtomicFileSaver}, so a failed write can never lose the script.
+     * For a non-file Uri (e.g. content:// opened from another app) there is
+     * no filesystem path to swap, so it writes directly through the
+     * ContentResolver exactly as before.
+     */
+    private void writeText(String path, String text) throws java.io.IOException {
+        if ("file".equals(mUri.getScheme())) {
+            AtomicFileSaver.save(new File(path), text);
+        } else {
+            PFiles.write(getContext().getContentResolver().openOutputStream(mUri), text);
+        }
     }
 
     public void forceStop() {
@@ -466,11 +479,24 @@ public class EditorView extends FrameLayout implements CodeCompletionBar.OnHintC
 
     @SuppressLint("CheckResult")
     public void saveFile() {
+        saveFile(() -> {
+        });
+    }
+
+    /**
+     * Saves, then runs {@code onDone} once the save Observable terminates —
+     * on success AND on error (the error is toasted first). Used by the
+     * "save and exit" flow so the activity cannot finish mid-save and cut
+     * the write off.
+     */
+    @SuppressLint("CheckResult")
+    public void saveFile(Runnable onDone) {
         save()
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(Observers.emptyConsumer(), e -> {
+                .subscribe(s -> onDone.run(), e -> {
                     e.printStackTrace();
                     Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_SHORT).show();
+                    onDone.run();
                 });
     }
 

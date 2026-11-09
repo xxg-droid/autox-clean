@@ -12,12 +12,16 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -25,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -46,6 +51,9 @@ import org.autojs.autojs.ui.build.ProjectConfigActivity
 import org.autojs.autojs.ui.build.ProjectConfigActivity_
 import org.autojs.autojs.ui.common.ScriptOperations
 import org.autojs.autojs.ui.compose.theme.AutoXJsTheme
+import org.autojs.autojs.ui.compose.theme.MintGreen
+import org.autojs.autojs.ui.compose.theme.MintGreenDark
+import org.autojs.autojs.ui.compose.theme.MintGreenLight
 import org.autojs.autojs.ui.compose.widget.MyIcon
 import org.autojs.autojs.ui.compose.widget.SearchBox2
 import org.autojs.autojs.ui.explorer.ExplorerViewKt
@@ -166,6 +174,10 @@ fun MainPage(
     var currentPage by remember {
         mutableStateOf(0)
     }
+    // build27 UI 改版：右下角 FAB 打开的新建菜单（新建目录/文件/导入/新建项目）
+    var fabMenuExpanded by remember {
+        mutableStateOf(false)
+    }
 
     SetSystemUI(scaffoldState)
 
@@ -174,6 +186,31 @@ fun MainPage(
             .fillMaxSize(),
         scaffoldState = scaffoldState,
         drawerGesturesEnabled = scaffoldState.drawerState.isOpen,
+        floatingActionButton = {
+            // 只在首页显示；管理页不显示
+            if (currentPage == 0) {
+                Box {
+                    FloatingActionButton(
+                        onClick = { fabMenuExpanded = true },
+                        backgroundColor = MintGreen,
+                        contentColor = Color.White,
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.size(width = 96.dp, height = 56.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(id = R.string.desc_more),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    TopAppBarMenu(
+                        expanded = fabMenuExpanded,
+                        onDismissRequest = { fabMenuExpanded = false },
+                        scriptListFragment = scriptListFragment
+                    )
+                }
+            }
+        },
         topBar = {
             Surface(elevation = 4.dp, color = MaterialTheme.colors.primarySurface) {
                 Column() {
@@ -333,34 +370,57 @@ private fun getBottomItems(context: Context) = mutableStateListOf(
     )
 )
 
+// build27 UI 改版：Material You 底部导航——选中图标背后有薄荷绿椭圆胶囊，
+// 未选中变淡，栏高加到 80dp；保留 首页 / 管理 两项。
 @Composable
 fun BottomBar(
     items: List<BottomNavigationItem>,
     currentSelected: Int,
     onSelectedChange: (Int) -> Unit
 ) {
-    BottomNavigation(elevation = 0.dp, backgroundColor = MaterialTheme.colors.background) {
+    val isLight = MaterialTheme.colors.isLight
+    val pillColor = if (isLight) MintGreenLight else MintGreen
+    val selectedContentColor = if (isLight) MintGreenDark else Color.Black
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(80.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         items.forEachIndexed { index, item ->
             val selected = currentSelected == index
-            val color = if (selected) MaterialTheme.colors.primary else Color.Gray
-            BottomNavigationItem(
-                selected = selected,
-                onClick = {
-                    if (!selected) {
-                        onSelectedChange(index)
-                    }
-                },
-                icon = {
+            val contentColor = if (selected) selectedContentColor else Color.Gray
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { if (!selected) onSelectedChange(index) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(
+                            color = if (selected) pillColor else Color.Transparent,
+                            shape = RoundedCornerShape(50)
+                        )
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         painter = painterResource(id = item.icon),
                         contentDescription = item.label,
-                        tint = color
+                        tint = contentColor,
+                        modifier = Modifier.size(24.dp)
                     )
-                },
-                label = {
-                    Text(text = item.label, color = color)
                 }
-            )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = item.label,
+                    color = contentColor,
+                    fontSize = 12.sp
+                )
+            }
         }
     }
 }
@@ -432,33 +492,13 @@ private fun TopBar(
                 )
             }
             LogButton()
-            when (currentPage) {
-                0 -> {
-                    var expanded by remember {
-                        mutableStateOf(false)
-                    }
-                    Box() {
-                        IconButton(onClick = { expanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = stringResource(id = R.string.desc_more)
-                            )
-                        }
-                        TopAppBarMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                            scriptListFragment = scriptListFragment
-                        )
-                    }
-                }
-
-                1 -> {
-                    IconButton(onClick = { AutoJs.getInstance().scriptEngineService.stopAll() }) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = stringResource(id = R.string.desc_more)
-                        )
-                    }
+            // build27 UI 改版：顶栏的“+”已移到右下角 FAB（首页），这里只留管理页的停止按钮
+            if (currentPage == 1) {
+                IconButton(onClick = { AutoJs.getInstance().scriptEngineService.stopAll() }) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = stringResource(id = R.string.desc_more)
+                    )
                 }
             }
 

@@ -222,8 +222,9 @@ public class EditActivity extends BaseActivity implements OnActivityResultDelega
                 .negativeText(R.string.text_save_and_exit)
                 .neutralText(R.string.text_exit_directly)
                 .onNegative((dialog, which) -> {
-                    mEditorView.saveFile();
-                    finishAndRemoveFromRecents();
+                    // Finish only after the save terminates (success or error),
+                    // so the activity cannot be destroyed mid-save.
+                    mEditorView.saveFile(() -> finishAndRemoveFromRecents());
                 })
                 .onNeutral((dialog, which) -> finishAndRemoveFromRecents())
                 .show();

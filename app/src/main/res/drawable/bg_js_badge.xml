@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- build27 UI 改版：黄色圆角正方形 js 标志，16dp 圆角（与卡片、FAB 统一） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="16dp"/>
+    <solid android:color="@color/js_badge_yellow"/>
+</shape>
